@@ -8,7 +8,12 @@ import {
   PRESET_LEVELS,
 } from './levels/presets';
 import { getBestMoves, saveScoreIfBest } from './storage/scores';
-import { animateBallMove, shakeTube, spawnConfetti } from './ui/animations';
+import {
+  animateBallMove,
+  initBackgroundFX,
+  shakeTube,
+  spawnConfetti,
+} from './ui/animations';
 import {
   buildUI,
   hideWinModal,
@@ -57,9 +62,16 @@ function handleTubeClick(index: number): void {
   const prevSelected = state.selectedTube;
 
   let sourceRect: DOMRect | null = null;
+  let tubeTopY: number | null = null;
   if (prevSelected !== null && prevSelected !== index) {
     const sourceBall = getTopBall(prevSelected);
-    if (sourceBall) sourceRect = sourceBall.getBoundingClientRect();
+    if (sourceBall) {
+      sourceRect = sourceBall.getBoundingClientRect();
+      const stack = sourceBall.closest('.tube-stack');
+      if (stack instanceof HTMLElement) {
+        tubeTopY = stack.getBoundingClientRect().top;
+      }
+    }
   }
 
   const result = tryMove(state, index);
@@ -76,9 +88,9 @@ function handleTubeClick(index: number): void {
     return;
   }
 
-  if (result.moved && sourceRect) {
+  if (result.moved && sourceRect && tubeTopY !== null) {
     const destBall = getTopBall(index);
-    if (destBall) animateBallMove(sourceRect, destBall);
+    if (destBall) animateBallMove(sourceRect, destBall, tubeTopY);
   }
 
   if (result.won) {
@@ -142,6 +154,7 @@ function handleModalReplay(): void {
 }
 
 function init(): void {
+  initBackgroundFX();
   const app = document.querySelector<HTMLElement>('#app')!;
   ui = buildUI(app);
 
