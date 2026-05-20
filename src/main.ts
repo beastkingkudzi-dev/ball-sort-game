@@ -8,7 +8,7 @@ import {
   PRESET_LEVELS,
 } from './levels/presets';
 import { getBestMoves, saveScoreIfBest } from './storage/scores';
-import { pulseBall, shakeTube } from './ui/animations';
+import { animateBallMove, shakeTube } from './ui/animations';
 import {
   buildUI,
   hideWinModal,
@@ -22,8 +22,17 @@ import { cloneTubes } from './game/rules';
 let state: GameState;
 let initialTubes: ReturnType<typeof cloneTubes>;
 let ui: GameUI;
+let pendingWinTimer: number | null = null;
+
+function cancelPendingWin(): void {
+  if (pendingWinTimer !== null) {
+    window.clearTimeout(pendingWinTimer);
+    pendingWinTimer = null;
+  }
+}
 
 function loadLevel(level: LevelDef): void {
+  cancelPendingWin();
   state = createGameState(level);
   initialTubes = cloneTubes(level.tubes);
   hideWinModal(ui);
@@ -37,31 +46,53 @@ function refresh(): void {
   renderBoard(ui, state, handleTubeClick);
 }
 
+function getTopBall(tubeIndex: number): HTMLElement | null {
+  const tubeEl = getTubeElement(ui, tubeIndex);
+  if (!tubeEl) return null;
+  const balls = tubeEl.querySelectorAll<HTMLElement>('.ball');
+  return balls[balls.length - 1] ?? null;
+}
+
 function handleTubeClick(index: number): void {
   const prevSelected = state.selectedTube;
-  const result = tryMove(state, index);
 
-  if (!result.moved && prevSelected !== null && state.selectedTube === prevSelected) {
+  let sourceRect: DOMRect | null = null;
+  if (prevSelected !== null && prevSelected !== index) {
+    const sourceBall = getTopBall(prevSelected);
+    if (sourceBall) sourceRect = sourceBall.getBoundingClientRect();
+  }
+
+  const result = tryMove(state, index);
+  const triedDifferentTube =
+    prevSelected !== null && prevSelected !== index;
+  const wasInvalidMove = triedDifferentTube && !result.moved;
+
+  state = result.state;
+  refresh();
+
+  if (wasInvalidMove) {
     const tubeEl = getTubeElement(ui, index);
     if (tubeEl) shakeTube(tubeEl);
     return;
   }
 
-  state = result.state;
-  refresh();
-
-  if (result.moved) {
-    const destTube = getTubeElement(ui, index);
-    const balls = destTube?.querySelectorAll('.ball');
-    const ballEl = balls?.[balls.length - 1];
-    if (ballEl instanceof HTMLElement) pulseBall(ballEl);
+  if (result.moved && sourceRect) {
+    const destBall = getTopBall(index);
+    if (destBall) animateBallMove(sourceRect, destBall);
   }
 
   if (result.won) {
-    const isNewBest = saveScoreIfBest(state.levelId, state.moves);
-    const best = getBestMoves(state.levelId);
-    const nextId = getNextPresetId(state.levelId);
-    showWinModal(ui, state.moves, best, isNewBest, nextId !== null);
+    const wonLevelId = state.levelId;
+    const wonMoves = state.moves;
+    const isNewBest = saveScoreIfBest(wonLevelId, wonMoves);
+    const best = getBestMoves(wonLevelId);
+    const nextId = getNextPresetId(wonLevelId);
+    cancelPendingWin();
+    pendingWinTimer = window.setTimeout(() => {
+      pendingWinTimer = null;
+      if (state.levelId !== wonLevelId) return;
+      showWinModal(ui, wonMoves, best, isNewBest, nextId !== null);
+    }, 420);
   }
 }
 
@@ -71,6 +102,7 @@ function handleUndo(): void {
 }
 
 function handleReset(): void {
+  cancelPendingWin();
   state = resetState(state, initialTubes);
   hideWinModal(ui);
   refresh();
