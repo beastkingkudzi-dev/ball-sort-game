@@ -8,7 +8,7 @@ import {
   PRESET_LEVELS,
 } from './levels/presets';
 import { getBestMoves, saveScoreIfBest } from './storage/scores';
-import { animateBallMove, shakeTube } from './ui/animations';
+import { animateBallMove, shakeTube, spawnConfetti } from './ui/animations';
 import {
   buildUI,
   hideWinModal,
@@ -91,8 +91,12 @@ function handleTubeClick(index: number): void {
     pendingWinTimer = window.setTimeout(() => {
       pendingWinTimer = null;
       if (state.levelId !== wonLevelId) return;
-      showWinModal(ui, wonMoves, best, isNewBest, nextId !== null);
-    }, 420);
+      spawnConfetti();
+      window.setTimeout(() => {
+        if (state.levelId !== wonLevelId) return;
+        showWinModal(ui, wonMoves, best, isNewBest, nextId !== null);
+      }, 450);
+    }, 780);
   }
 }
 
