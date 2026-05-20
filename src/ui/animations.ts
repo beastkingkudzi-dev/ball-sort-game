@@ -1,12 +1,12 @@
 const CONFETTI_PALETTE = [
-  '#ffd1dc',
-  '#ffe1a8',
-  '#d4f0e0',
+  '#ffffff',
   '#c8e0ff',
-  '#e6d0ff',
-  '#ffc8a8',
-  '#a8e8d8',
-  '#ffb3c1',
+  '#a4c2ee',
+  '#7fa5dc',
+  '#dbe9ff',
+  '#b5d1ee',
+  '#5a86c3',
+  '#e8f1fa',
 ];
 
 export function shakeTube(element: HTMLElement): void {
@@ -23,14 +23,14 @@ export function shakeTube(element: HTMLElement): void {
 function settleBall(ball: HTMLElement): void {
   ball.animate(
     [
-      { transform: 'scale(1.14, 0.84)' },
-      { transform: 'scale(0.9, 1.1)', offset: 0.32 },
-      { transform: 'scale(1.06, 0.96)', offset: 0.58 },
-      { transform: 'scale(0.98, 1.02)', offset: 0.8 },
+      { transform: 'scale(1.16, 0.82)' },
+      { transform: 'scale(0.88, 1.12)', offset: 0.32 },
+      { transform: 'scale(1.07, 0.95)', offset: 0.55 },
+      { transform: 'scale(0.97, 1.03)', offset: 0.78 },
       { transform: 'scale(1, 1)' },
     ],
     {
-      duration: 400,
+      duration: 420,
       easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
     },
   );
@@ -50,23 +50,23 @@ export function animateBallMove(
     return;
   }
 
-  // Compute arc height so the apex clears the highest tube rim by 'clearance'.
-  // Ball top at apex (absolute) = (toRect.top + fromRect.top)/2 - arcHeight
-  // We want apex <= tubeTopY - clearance.
-  const clearance = 52;
+  // Apex absolute Y must clear the tube rim by at least `clearance` px.
+  const clearance = 60;
   const naturalMidAbsY = (toRect.top + fromRect.top) / 2;
   let arcHeight = naturalMidAbsY - (tubeTopY - clearance);
-  arcHeight = Math.max(arcHeight + 28, 90);
+  arcHeight = Math.max(arcHeight + 35, 110);
 
+  // Eliminate the 1-frame flash at the destination's natural position by
+  // pinning the ball at the source position BEFORE the animation starts.
+  ball.style.transformOrigin = 'center';
+  ball.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(1.04)`;
   ball.style.zIndex = '50';
-  ball.style.filter =
-    'drop-shadow(0 12px 14px rgba(0, 0, 0, 0.55))';
+  ball.style.filter = 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.65))';
+  void ball.offsetHeight;
 
-  // Parametric parabola: x linear, y via sine envelope.
-  //   xT(t) = dx*(1-t)
-  //   yT(t) = dy*(1-t) - arcHeight*sin(πt)
-  // Built as 9 keyframes (8 sub-steps) for smooth interpolation.
-  const steps = 8;
+  // Smoother arc: 16 sub-segments → 17 keyframes.
+  // y(t) = dy*(1-t) - arcHeight*sin(πt)  (parabolic envelope)
+  const steps = 16;
   const keyframes: Keyframe[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
@@ -79,22 +79,35 @@ export function animateBallMove(
     });
   }
 
-  // Duration scales gently with arc height (longer flights = longer hang time).
-  const duration = Math.max(460, Math.min(720, 360 + arcHeight * 1.05));
+  const duration = Math.max(540, Math.min(840, 400 + arcHeight * 1.1));
 
   const travel = ball.animate(keyframes, {
     duration,
-    easing: 'cubic-bezier(0.38, 0.05, 0.4, 1)',
+    easing: 'cubic-bezier(0.36, 0.04, 0.42, 1)',
+    fill: 'forwards',
   });
 
   travel.onfinish = () => {
+    const a = travel as Animation & {
+      commitStyles?: () => void;
+    };
+    if (typeof a.commitStyles === 'function') {
+      try {
+        a.commitStyles();
+      } catch {
+        /* no-op for older browsers */
+      }
+    }
+    travel.cancel();
+    ball.style.transform = '';
+    ball.style.transformOrigin = '';
     ball.style.zIndex = '';
     ball.style.filter = '';
     settleBall(ball);
   };
 }
 
-export function spawnConfetti(count = 80): void {
+export function spawnConfetti(count = 100): void {
   const layer = document.createElement('div');
   layer.className = 'confetti-layer';
   document.body.appendChild(layer);
@@ -112,17 +125,17 @@ export function spawnConfetti(count = 80): void {
     piece.style.left = `${cx}px`;
     piece.style.top = `${cy}px`;
 
-    if (Math.random() > 0.6) piece.classList.add('confetti-round');
+    if (Math.random() > 0.55) piece.classList.add('confetti-round');
 
     const angle = Math.random() * Math.PI * 2;
-    const speed = 200 + Math.random() * 300;
+    const speed = 220 + Math.random() * 340;
     const kx = Math.cos(angle) * speed;
-    const kyKick = Math.sin(angle) * speed - 140;
-    const fyFall = h * 0.7 + Math.random() * 240;
+    const kyKick = Math.sin(angle) * speed - 160;
+    const fyFall = h * 0.7 + Math.random() * 260;
     const rotZ = (Math.random() - 0.5) * 1080;
     const rotY = (Math.random() - 0.5) * 720;
-    const startScale = 0.55 + Math.random() * 0.55;
-    const duration = 1600 + Math.random() * 1100;
+    const startScale = 0.5 + Math.random() * 0.7;
+    const duration = 1700 + Math.random() * 1200;
 
     const anim = piece.animate(
       [
@@ -150,7 +163,7 @@ export function spawnConfetti(count = 80): void {
     layer.appendChild(piece);
   }
 
-  window.setTimeout(() => layer.remove(), 3600);
+  window.setTimeout(() => layer.remove(), 3800);
 }
 
 export function initBackgroundFX(): void {
@@ -163,6 +176,8 @@ export function initBackgroundFX(): void {
     <div class="aurora-blob blob-b"></div>
     <div class="aurora-blob blob-c"></div>
     <div class="aurora-blob blob-d"></div>
+    <div class="aurora-blob blob-e"></div>
+    <div class="aurora-blob blob-f"></div>
   `;
   document.body.appendChild(aurora);
 
@@ -170,25 +185,42 @@ export function initBackgroundFX(): void {
   dust.className = 'bg-dust';
   document.body.appendChild(dust);
 
-  const count = 55;
+  const count = 140;
   for (let i = 0; i < count; i++) {
     const p = document.createElement('div');
     p.className = 'dust-mote';
-    const size = 1.2 + Math.random() * 2.4;
+    const roll = Math.random();
+    const isStar = roll > 0.86;
+    const isLargeStar = roll > 0.97;
+    let size: number;
+    if (isLargeStar) {
+      size = 3 + Math.random() * 2.2;
+      p.classList.add('star', 'star-big');
+    } else if (isStar) {
+      size = 2 + Math.random() * 1.4;
+      p.classList.add('star');
+    } else {
+      size = 1 + Math.random() * 1.8;
+    }
+
     p.style.width = `${size}px`;
     p.style.height = `${size}px`;
     p.style.left = `${Math.random() * 100}%`;
-    p.style.top = `${100 + Math.random() * 20}%`;
-    p.style.opacity = String(0.25 + Math.random() * 0.55);
-    const dur = 14 + Math.random() * 22;
-    p.style.animationDuration = `${dur}s`;
-    p.style.animationDelay = `${-Math.random() * dur}s`;
-    const hue =
-      Math.random() > 0.5
-        ? 'rgba(255, 220, 240, 0.9)'
-        : 'rgba(210, 230, 255, 0.85)';
-    p.style.background = hue;
-    p.style.boxShadow = `0 0 6px ${hue}`;
+    p.style.top = `${100 + Math.random() * 30}%`;
+    p.style.opacity = String(0.3 + Math.random() * 0.6);
+
+    const dur = 16 + Math.random() * 26;
+    p.style.animationDuration = `${dur}s, ${(2 + Math.random() * 4).toFixed(2)}s`;
+    p.style.animationDelay = `${-Math.random() * dur}s, ${-Math.random() * 4}s`;
+
+    const tint = Math.random();
+    let color: string;
+    if (tint < 0.5) color = 'rgba(255, 255, 255, 0.95)';
+    else if (tint < 0.8) color = 'rgba(220, 235, 255, 0.92)';
+    else color = 'rgba(180, 210, 255, 0.9)';
+    p.style.background = color;
+    p.style.boxShadow = `0 0 ${size * 2.5}px ${color}`;
+
     dust.appendChild(p);
   }
 }
