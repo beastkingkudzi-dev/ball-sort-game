@@ -36,42 +36,60 @@ function settleBall(ball: HTMLElement): void {
   );
 }
 
+/**
+ * Animate a ball moving between two tubes by cloning the source ball into a
+ * `position: fixed` overlay and animating the clone. The actual destination
+ * ball is hidden until the clone arrives. This avoids any one-frame flash
+ * at the destination's natural drop position and guarantees that no other
+ * balls in the DOM move during the animation.
+ */
 export function animateBallMove(
   fromRect: DOMRect,
-  ball: HTMLElement,
+  destBall: HTMLElement,
   tubeTopY: number,
 ): void {
-  const toRect = ball.getBoundingClientRect();
-  const dx = fromRect.left - toRect.left;
-  const dy = fromRect.top - toRect.top;
+  const toRect = destBall.getBoundingClientRect();
+  const dx = toRect.left - fromRect.left;
+  const dy = toRect.top - fromRect.top;
 
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
-    settleBall(ball);
+    settleBall(destBall);
     return;
   }
 
-  // Apex absolute Y must clear the tube rim by at least `clearance` px.
+  // Apex must clear the highest tube rim.
   const clearance = 60;
   const naturalMidAbsY = (toRect.top + fromRect.top) / 2;
   let arcHeight = naturalMidAbsY - (tubeTopY - clearance);
   arcHeight = Math.max(arcHeight + 35, 110);
 
-  // Eliminate the 1-frame flash at the destination's natural position by
-  // pinning the ball at the source position BEFORE the animation starts.
-  ball.style.transformOrigin = 'center';
-  ball.style.transform = `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) scale(1.04)`;
-  ball.style.zIndex = '50';
-  ball.style.filter = 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.65))';
-  void ball.offsetHeight;
+  destBall.style.opacity = '0';
 
-  // Smoother arc: 16 sub-segments → 17 keyframes.
-  // y(t) = dy*(1-t) - arcHeight*sin(πt)  (parabolic envelope)
-  const steps = 16;
+  const clone = destBall.cloneNode(true) as HTMLElement;
+  clone.classList.remove('lifted');
+  clone.style.opacity = '1';
+  clone.style.position = 'fixed';
+  clone.style.left = `${fromRect.left}px`;
+  clone.style.top = `${fromRect.top}px`;
+  clone.style.width = `${fromRect.width}px`;
+  clone.style.height = `${fromRect.height}px`;
+  clone.style.margin = '0';
+  clone.style.pointerEvents = 'none';
+  clone.style.zIndex = '210';
+  clone.style.transformOrigin = 'center';
+  clone.style.transform = 'scale(1.04)';
+  clone.style.filter = 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.65))';
+  document.body.appendChild(clone);
+
+  // Parametric parabolic trajectory in screen-pixel space.
+  //   x(t) = dx*t
+  //   y(t) = dy*t - arcHeight*sin(πt)
+  const steps = 18;
   const keyframes: Keyframe[] = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const x = dx * (1 - t);
-    const y = dy * (1 - t) - arcHeight * Math.sin(Math.PI * t);
+    const x = dx * t;
+    const y = dy * t - arcHeight * Math.sin(Math.PI * t);
     const scale = 1 + 0.08 * Math.sin(Math.PI * t);
     keyframes.push({
       transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${scale.toFixed(3)})`,
@@ -79,31 +97,18 @@ export function animateBallMove(
     });
   }
 
-  const duration = Math.max(540, Math.min(840, 400 + arcHeight * 1.1));
+  const duration = Math.max(540, Math.min(880, 420 + arcHeight * 1.1));
 
-  const travel = ball.animate(keyframes, {
+  const travel = clone.animate(keyframes, {
     duration,
     easing: 'cubic-bezier(0.36, 0.04, 0.42, 1)',
     fill: 'forwards',
   });
 
   travel.onfinish = () => {
-    const a = travel as Animation & {
-      commitStyles?: () => void;
-    };
-    if (typeof a.commitStyles === 'function') {
-      try {
-        a.commitStyles();
-      } catch {
-        /* no-op for older browsers */
-      }
-    }
-    travel.cancel();
-    ball.style.transform = '';
-    ball.style.transformOrigin = '';
-    ball.style.zIndex = '';
-    ball.style.filter = '';
-    settleBall(ball);
+    destBall.style.opacity = '';
+    clone.remove();
+    settleBall(destBall);
   };
 }
 
@@ -166,9 +171,142 @@ export function spawnConfetti(count = 100): void {
   window.setTimeout(() => layer.remove(), 3800);
 }
 
-export function initBackgroundFX(): void {
-  if (document.querySelector('.bg-aurora')) return;
+// ----- Minecraft-style background grid ---------------------------------
 
+const MAT_MAP: Record<string, string> = {
+  a: 'air',
+  g: 'grass',
+  d: 'dirt',
+  s: 'stone',
+  w: 'wood',
+  l: 'leaves',
+  '~': 'water',
+  n: 'sand',
+  D: 'diamond',
+  G: 'gold',
+  R: 'redstone',
+  o: 'obsidian',
+  c: 'cobble',
+  L: 'lava',
+};
+
+function parseScene(text: string): string[] {
+  const rows = text
+    .split('\n')
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
+  const maxW = Math.max(...rows.map((r) => r.length));
+  return rows.map((r) => r.padEnd(maxW, 'a'));
+}
+
+// Each scene is exactly 14 wide × 8 tall.
+const SCENES: string[][] = [
+  // 1) Day landscape: tree on grass, mountain rising on the right
+  parseScene(`
+    aaaaaaaaaaaaaa
+    aaaaaaaaaaaass
+    aaaaaalllaasss
+    aaaaalllllssss
+    aaaaawllssssss
+    ggggggwgggssss
+    ddddddwdddssss
+    ssssssssssssss
+  `),
+  // 2) Underground cave with ores and cobblestone clumps
+  parseScene(`
+    ssssssssssssss
+    ssDsssssGssRss
+    ssssscccssssss
+    sscsccsssDssss
+    ssssRsssssooss
+    sscssssssoosss
+    sssGsssssoosss
+    sssssDsssssRss
+  `),
+  // 3) Beach: ocean on the left, sand on the right
+  parseScene(`
+    aaaaaaaaaaaaaa
+    aaaaaaaaaaaaaa
+    aaaaaaaaaaaaaa
+    ~~~~~~~nnnnnnn
+    ~~~~~~~nnnnnnn
+    ~~~~~~~~nnnnnn
+    nnnnnnnnnnnnnn
+    dddddddddddddd
+  `),
+  // 4) Sunset over mountains with lava at the base
+  parseScene(`
+    aaaaaaaaGGaaaa
+    aaaaaaGGGGGaaa
+    aaaaaaGGGGGaaa
+    aaassaaGGaassa
+    aassssaaaassss
+    ssssssssssssss
+    ddddddddddssss
+    LLLLLLddddddss
+  `),
+  // 5) Pixel heart floating in the night sky
+  parseScene(`
+    aaaaaaaaaaaaaa
+    aaaRRaaaRRaaaa
+    aaRRRRRRRRRaaa
+    aaRRRRRRRRRaaa
+    aaaRRRRRRRaaaa
+    aaaaRRRRRaaaaa
+    aaaaaRRRaaaaaa
+    aaaaaaRaaaaaaa
+  `),
+  // 6) Deep mine with a diamond + gold mosaic
+  parseScene(`
+    ssssDssssDssss
+    ssssssssssssss
+    ssDssssDssssDs
+    ssssGssssGssss
+    ssDssssDssssDs
+    ssssssssssssss
+    ssDssGssDsGsss
+    ssssDsssssDsss
+  `),
+];
+
+const GRID_COLS = 14;
+const GRID_ROWS = 8;
+
+function applyScene(blocks: HTMLElement[], scene: string[]): void {
+  for (let row = 0; row < GRID_ROWS; row++) {
+    const rowStr = scene[row] ?? '';
+    for (let col = 0; col < GRID_COLS; col++) {
+      const idx = row * GRID_COLS + col;
+      const block = blocks[idx];
+      if (!block) continue;
+      const ch = rowStr[col] ?? 'a';
+      const mat = MAT_MAP[ch] ?? 'air';
+      // Stagger the transitions so the scene "warps" into place over ~1.5s
+      const delayMs = Math.random() * 900;
+      block.style.transitionDelay = `${delayMs}ms`;
+      block.className = `mc-block mat-${mat}`;
+    }
+  }
+}
+
+export function initBackgroundFX(): void {
+  if (document.querySelector('.mc-grid')) return;
+
+  const grid = document.createElement('div');
+  grid.className = 'mc-grid';
+  document.body.appendChild(grid);
+
+  const blocks: HTMLElement[] = [];
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      const b = document.createElement('div');
+      b.className = 'mc-block mat-air';
+      grid.appendChild(b);
+      blocks.push(b);
+    }
+  }
+
+  // Soft aurora overlay (kept for atmosphere on top of the grid)
   const aurora = document.createElement('div');
   aurora.className = 'bg-aurora';
   aurora.innerHTML = `
@@ -176,51 +314,53 @@ export function initBackgroundFX(): void {
     <div class="aurora-blob blob-b"></div>
     <div class="aurora-blob blob-c"></div>
     <div class="aurora-blob blob-d"></div>
-    <div class="aurora-blob blob-e"></div>
-    <div class="aurora-blob blob-f"></div>
   `;
   document.body.appendChild(aurora);
 
+  // Twinkling star dust above the grid
   const dust = document.createElement('div');
   dust.className = 'bg-dust';
   document.body.appendChild(dust);
 
-  const count = 140;
-  for (let i = 0; i < count; i++) {
+  const dustCount = 110;
+  for (let i = 0; i < dustCount; i++) {
     const p = document.createElement('div');
     p.className = 'dust-mote';
     const roll = Math.random();
-    const isStar = roll > 0.86;
+    const isStar = roll > 0.85;
     const isLargeStar = roll > 0.97;
     let size: number;
     if (isLargeStar) {
-      size = 3 + Math.random() * 2.2;
+      size = 3 + Math.random() * 2;
       p.classList.add('star', 'star-big');
     } else if (isStar) {
-      size = 2 + Math.random() * 1.4;
+      size = 2 + Math.random() * 1.2;
       p.classList.add('star');
     } else {
-      size = 1 + Math.random() * 1.8;
+      size = 1 + Math.random() * 1.5;
     }
-
     p.style.width = `${size}px`;
     p.style.height = `${size}px`;
     p.style.left = `${Math.random() * 100}%`;
     p.style.top = `${100 + Math.random() * 30}%`;
-    p.style.opacity = String(0.3 + Math.random() * 0.6);
-
-    const dur = 16 + Math.random() * 26;
+    p.style.opacity = String(0.35 + Math.random() * 0.55);
+    const dur = 18 + Math.random() * 22;
     p.style.animationDuration = `${dur}s, ${(2 + Math.random() * 4).toFixed(2)}s`;
     p.style.animationDelay = `${-Math.random() * dur}s, ${-Math.random() * 4}s`;
-
-    const tint = Math.random();
-    let color: string;
-    if (tint < 0.5) color = 'rgba(255, 255, 255, 0.95)';
-    else if (tint < 0.8) color = 'rgba(220, 235, 255, 0.92)';
-    else color = 'rgba(180, 210, 255, 0.9)';
-    p.style.background = color;
-    p.style.boxShadow = `0 0 ${size * 2.5}px ${color}`;
-
+    const tint =
+      Math.random() < 0.6
+        ? 'rgba(255, 255, 255, 0.95)'
+        : 'rgba(220, 235, 255, 0.92)';
+    p.style.background = tint;
+    p.style.boxShadow = `0 0 ${size * 2.5}px ${tint}`;
     dust.appendChild(p);
   }
+
+  // Apply first scene then cycle every 11s
+  applyScene(blocks, SCENES[0]);
+  let sceneIdx = 0;
+  window.setInterval(() => {
+    sceneIdx = (sceneIdx + 1) % SCENES.length;
+    applyScene(blocks, SCENES[sceneIdx]);
+  }, 11000);
 }

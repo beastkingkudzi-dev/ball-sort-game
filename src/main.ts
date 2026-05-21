@@ -41,7 +41,9 @@ function loadLevel(level: LevelDef): void {
   state = createGameState(level);
   initialTubes = cloneTubes(level.tubes);
   hideWinModal(ui);
-  if (!level.id.startsWith('random-')) {
+  if (level.id.startsWith('random-')) {
+    ui.levelSelect.value = '';
+  } else {
     ui.levelSelect.value = level.id;
   }
   refresh();
@@ -131,11 +133,16 @@ function handleLevelChange(): void {
 }
 
 function handleRandom(): void {
-  const difficulties: Difficulty[] = ['easy', 'medium', 'hard'];
-  const difficulty =
-    difficulties[Math.floor(Math.random() * difficulties.length)];
-  const colors = 3 + Math.floor(Math.random() * 3);
-  const emptyTubes = Math.random() > 0.5 ? 2 : 1;
+  const raw = ui.diffSelect.value as Difficulty;
+  const difficulty: Difficulty =
+    raw === 'easy' || raw === 'medium' || raw === 'hard' ? raw : 'medium';
+  const colorsByDiff: Record<Difficulty, number> = {
+    easy: 3,
+    medium: 4,
+    hard: 6,
+  };
+  const colors = colorsByDiff[difficulty];
+  const emptyTubes = difficulty === 'hard' ? 1 : 2;
   const level = generateLevel({ colors, emptyTubes, difficulty });
   loadLevel(level);
 }

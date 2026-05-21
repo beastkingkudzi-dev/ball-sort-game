@@ -10,6 +10,7 @@ export interface GameUI {
   bestLabel: HTMLElement;
   board: HTMLElement;
   levelSelect: HTMLSelectElement;
+  diffSelect: HTMLSelectElement;
   undoBtn: HTMLButtonElement;
   resetBtn: HTMLButtonElement;
   randomBtn: HTMLButtonElement;
@@ -34,13 +35,28 @@ export function buildUI(container: HTMLElement): GameUI {
           <span id="best-label" class="stat stat-best"></span>
         </div>
         <div class="controls">
-          <label class="select-wrap">
-            Level
-            <select id="level-select"></select>
-          </label>
-          <button type="button" id="btn-undo" class="btn">Undo</button>
-          <button type="button" id="btn-reset" class="btn">Reset</button>
-          <button type="button" id="btn-random" class="btn btn-primary">New Random</button>
+          <div class="control-group" data-section="classical">
+            <span class="group-label">Classical</span>
+            <select id="level-select" aria-label="Classical level"></select>
+          </div>
+          <div class="control-group" data-section="random">
+            <span class="group-label">Random</span>
+            <div class="control-row">
+              <select id="diff-select" aria-label="Difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              <button type="button" id="btn-random" class="btn btn-primary">New</button>
+            </div>
+          </div>
+          <div class="control-group" data-section="actions">
+            <span class="group-label">Actions</span>
+            <div class="control-row">
+              <button type="button" id="btn-undo" class="btn">Undo</button>
+              <button type="button" id="btn-reset" class="btn">Reset</button>
+            </div>
+          </div>
         </div>
       </div>
       <div id="board" class="board" role="group" aria-label="Game tubes"></div>
@@ -65,12 +81,6 @@ export function buildUI(container: HTMLElement): GameUI {
     levelSelect.appendChild(opt);
   }
 
-  const randomOpt = document.createElement('option');
-  randomOpt.value = '__random__';
-  randomOpt.textContent = '— Random levels —';
-  randomOpt.disabled = true;
-  levelSelect.appendChild(randomOpt);
-
   return {
     root: container.querySelector('.game')!,
     levelLabel: container.querySelector('#level-label')!,
@@ -78,6 +88,7 @@ export function buildUI(container: HTMLElement): GameUI {
     bestLabel: container.querySelector('#best-label')!,
     board: container.querySelector('#board')!,
     levelSelect,
+    diffSelect: container.querySelector('#diff-select')!,
     undoBtn: container.querySelector('#btn-undo')!,
     resetBtn: container.querySelector('#btn-reset')!,
     randomBtn: container.querySelector('#btn-random')!,
