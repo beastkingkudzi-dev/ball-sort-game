@@ -20,48 +20,28 @@ export function shakeTube(element: HTMLElement): void {
   );
 }
 
-function settleBall(ball: HTMLElement): void {
-  ball.animate(
-    [
-      { transform: 'scale(1.16, 0.82)' },
-      { transform: 'scale(0.88, 1.12)', offset: 0.32 },
-      { transform: 'scale(1.07, 0.95)', offset: 0.55 },
-      { transform: 'scale(0.97, 1.03)', offset: 0.78 },
-      { transform: 'scale(1, 1)' },
-    ],
-    {
-      duration: 420,
-      easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-    },
-  );
-}
-
 /**
- * Animate a ball moving between two tubes by cloning the source ball into a
- * `position: fixed` overlay and animating the clone. The actual destination
- * ball is hidden until the clone arrives. This avoids any one-frame flash
- * at the destination's natural drop position and guarantees that no other
- * balls in the DOM move during the animation.
+ * Move the top ball of the source tube to the top of the destination tube via
+ * a direct, constant-speed straight line. The actual destination ball is
+ * hidden until a fixed-position clone arrives, so no other ball ever moves.
+ *
+ * No anticipation (no source-side wind-up offset), no aftershoot
+ * (no landing squash), no easing (linear timing), no in-flight scale change.
+ * `fromRect` is the top-of-source ball's bounding rect at click time;
+ * `destBall` is the freshly-rendered top ball of the destination tube.
  */
 export function animateBallMove(
   fromRect: DOMRect,
   destBall: HTMLElement,
-  tubeTopY: number,
+  _tubeTopY: number,
 ): void {
   const toRect = destBall.getBoundingClientRect();
   const dx = toRect.left - fromRect.left;
   const dy = toRect.top - fromRect.top;
 
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1) {
-    settleBall(destBall);
     return;
   }
-
-  // Apex must clear the highest tube rim.
-  const clearance = 60;
-  const naturalMidAbsY = (toRect.top + fromRect.top) / 2;
-  let arcHeight = naturalMidAbsY - (tubeTopY - clearance);
-  arcHeight = Math.max(arcHeight + 35, 110);
 
   destBall.style.opacity = '0';
 
@@ -77,38 +57,28 @@ export function animateBallMove(
   clone.style.pointerEvents = 'none';
   clone.style.zIndex = '210';
   clone.style.transformOrigin = 'center';
-  clone.style.transform = 'scale(1.04)';
-  clone.style.filter = 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.65))';
+  clone.style.transform = 'translate(0, 0)';
+  clone.style.filter = '';
   document.body.appendChild(clone);
 
-  // Parametric parabolic trajectory in screen-pixel space.
-  //   x(t) = dx*t
-  //   y(t) = dy*t - arcHeight*sin(πt)
-  const steps = 18;
-  const keyframes: Keyframe[] = [];
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = dx * t;
-    const y = dy * t - arcHeight * Math.sin(Math.PI * t);
-    const scale = 1 + 0.08 * Math.sin(Math.PI * t);
-    keyframes.push({
-      transform: `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${scale.toFixed(3)})`,
-      offset: t,
-    });
-  }
+  const distance = Math.hypot(dx, dy);
+  const duration = Math.max(180, Math.min(360, distance * 0.55));
 
-  const duration = Math.max(540, Math.min(880, 420 + arcHeight * 1.1));
-
-  const travel = clone.animate(keyframes, {
-    duration,
-    easing: 'cubic-bezier(0.36, 0.04, 0.42, 1)',
-    fill: 'forwards',
-  });
+  const travel = clone.animate(
+    [
+      { transform: 'translate(0, 0)' },
+      { transform: `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px)` },
+    ],
+    {
+      duration,
+      easing: 'linear',
+      fill: 'forwards',
+    },
+  );
 
   travel.onfinish = () => {
     destBall.style.opacity = '';
     clone.remove();
-    settleBall(destBall);
   };
 }
 

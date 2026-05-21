@@ -801,8 +801,6 @@ select {
     inset 4px 4px 6px rgba(255, 255, 255, 0.16),
     0 8px 16px rgba(0, 0, 0, 0.6),
     0 2px 4px rgba(0, 0, 0, 0.55);
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), filter 0.2s ease, opacity 0s;
-  will-change: transform;
   transform-origin: center bottom;
 }
 
@@ -838,8 +836,7 @@ select {
 }
 
 .ball.lifted {
-  transform: translateY(-20px) scale(1.06);
-  filter: brightness(1.15) drop-shadow(0 12px 14px rgba(0, 0, 0, 0.45));
+  filter: brightness(1.2) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
 }
 
 /* ============================================================
